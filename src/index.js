@@ -6,6 +6,7 @@ import items from './routes/items.js';
 import auth from './routes/auth.js';
 import logs from './routes/logs.js';
 import notes from './routes/notes.js';
+import analysis from './routes/analysis.js';
 
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set (see .env.example)');
 
@@ -22,6 +23,7 @@ app.use('/api/auth', auth);
 app.use('/api/items', items);
 app.use('/api/logs', logs);
 app.use('/api/notes', notes);
+app.use('/api/analysis', analysis);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
