@@ -28,6 +28,7 @@ router.post('/register', async (req, res) => {
     username: name,
     usernameKey: name.toLowerCase(),
     passwordHash: await bcrypt.hash(password, 10),
+    lastSeenAt: new Date(),
   });
   // The first account adopts items created before accounts existed.
   if (isFirst) await Item.updateMany({ owner: null }, { owner: user._id });
@@ -42,6 +43,7 @@ router.post('/login', async (req, res) => {
   const user = await User.findOne({ usernameKey: username.trim().toLowerCase() });
   if (!user || !(await bcrypt.compare(password, user.passwordHash)))
     return res.status(401).json({ error: 'Wrong username or password' });
+  await User.updateOne({ _id: user._id }, { lastSeenAt: new Date() });
   res.json({ token: signToken(user), user });
 });
 
@@ -58,7 +60,8 @@ router.put('/privacy', requireAuth, async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  const user = await User.findById(req.userId);
+  // Runs on every app open, so it doubles as "last seen".
+  const user = await User.findByIdAndUpdate(req.userId, { lastSeenAt: new Date() });
   if (!user) return res.status(401).json({ error: 'Account not found' });
   res.json({ user });
 });

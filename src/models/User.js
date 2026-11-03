@@ -8,6 +8,8 @@ const UserSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     // Privacy mode: dummy data and read-only on every device until turned off with the password.
     privacy: { type: Boolean, default: false },
+    // Last sign-in or app open (set by /auth/me); for /analysis.
+    lastSeenAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -21,24 +21,39 @@ async function checkPassword(req, res, next) {
   next();
 }
 
-router.post('/', checkPassword, async (_req, res) => {
-  const [users, projects, tasks, notes] = await Promise.all([
+// `since`: start of "today" in the viewer's timezone (ISO); defaults to the server's midnight.
+router.post('/', checkPassword, async (req, res) => {
+  let since = new Date(req.body.since);
+  if (isNaN(since)) (since = new Date()).setHours(0, 0, 0, 0);
+  const [users, projects, tasks, notes, activeToday] = await Promise.all([
     User.estimatedDocumentCount(),
     Item.countDocuments({ kind: 'project' }),
     Item.countDocuments({ kind: { $ne: 'project' } }),
     Note.estimatedDocumentCount(),
+    User.countDocuments({ lastSeenAt: { $gte: since } }),
   ]);
-  res.json({ users, projects, tasks, notes });
+  res.json({ users, projects, tasks, notes, activeToday });
 });
 
 // Newest users first, PAGE at a time; pass the returned `next` as `cursor` for the following page.
 router.post('/users', checkPassword, async (req, res) => {
   const { cursor } = req.body;
   const filter = mongoose.isValidObjectId(cursor) ? { _id: { $lt: cursor } } : {};
-  const docs = await User.find(filter, { username: 1, createdAt: 1 }).sort({ _id: -1 }).limit(PAGE + 1).lean();
+  const docs = await User.find(filter, { username: 1, createdAt: 1, lastSeenAt: 1 }).sort({ _id: -1 }).limit(PAGE + 1).lean();
   const page = docs.slice(0, PAGE);
+  const counts = await Item.aggregate([
+    { $match: { owner: { $in: page.map((u) => u._id) }, kind: { $ne: 'project' } } },
+    { $group: { _id: '$owner', n: { $sum: 1 } } },
+  ]);
+  const tasks = new Map(counts.map((c) => [String(c._id), c.n]));
   res.json({
-    users: page.map((u) => ({ id: String(u._id), username: u.username, createdAt: u.createdAt })),
+    users: page.map((u) => ({
+      id: String(u._id),
+      username: u.username,
+      createdAt: u.createdAt,
+      lastSeenAt: u.lastSeenAt,
+      tasks: tasks.get(String(u._id)) || 0,
+    })),
     next: docs.length > PAGE ? String(page.at(-1)._id) : null,
   });
 });
